@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/strings.dart';
 import '../data/models.dart';
 import '../data/store.dart';
+import '../services/native.dart';
 
 /// Bottom sheet to pick an existing host or create a new one.
 Future<Host?> pickHost(BuildContext context) => showModalBottomSheet<Host>(
@@ -106,6 +107,35 @@ class _HostDialogState extends State<_HostDialog> {
   late final phone = TextEditingController(text: widget.editing?.phone);
   late final venue = TextEditingController(text: widget.editing?.venue);
 
+  /// Numbers of the imported contact, default/latest first.
+  List<String> numbers = [];
+  bool imported = false;
+  String? importError;
+
+  Future<void> _import() async {
+    final PickedContact? c;
+    try {
+      c = await NativeBridge.pickContact();
+    } on ContactsDenied {
+      setState(() => importError = tr(context, 'contacts_denied'));
+      return;
+    }
+    if (c == null || !mounted) return;
+    // The same number saved twice in a contact shows once.
+    final seen = <String>{};
+    final nums = [
+      for (final n in c.phones)
+        if (seen.add(normalizePhone(n))) n.trim()
+    ];
+    setState(() {
+      importError = nums.isEmpty ? tr(context, 'contact_no_phone') : null;
+      if (c!.name.isNotEmpty) name.text = c.name;
+      if (nums.isNotEmpty) phone.text = nums.first;
+      numbers = nums;
+      imported = true;
+    });
+  }
+
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
     final norm = normalizePhone(phone.text);
@@ -164,6 +194,40 @@ class _HostDialogState extends State<_HostDialog> {
         key: _form,
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, children: [
+            imported
+                ? OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48)),
+                    icon: const Icon(Icons.check, color: Color(0xFF1B5E20)),
+                    label: Text(tr(context, 'imported_pick_another')),
+                    onPressed: _import,
+                  )
+                : FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48)),
+                    icon: const Icon(Icons.contacts_outlined),
+                    label: Text(tr(context, 'import_contacts')),
+                    onPressed: _import,
+                  ),
+            if (importError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(importError!,
+                    style:
+                        TextStyle(color: Theme.of(context).colorScheme.error)),
+              ),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(tr(context, 'or_type'),
+                      style: Theme.of(context).textTheme.labelSmall),
+                ),
+                const Expanded(child: Divider()),
+              ]),
+            ),
             TextFormField(
               controller: name,
               decoration: InputDecoration(labelText: tr(context, 'host_name')),
@@ -179,6 +243,29 @@ class _HostDialogState extends State<_HostDialog> {
                 return d.length < 7 ? tr(context, 'invalid_phone') : null;
               },
             ),
+            if (numbers.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(tr(context, 'contact_numbers'),
+                        style: Theme.of(context).textTheme.labelSmall),
+                    const SizedBox(height: 6),
+                    Wrap(spacing: 8, runSpacing: 6, children: [
+                      for (final (i, n) in numbers.indexed)
+                        ChoiceChip(
+                          label: Text(i == 0
+                              ? '$n · ${tr(context, 'latest')}'
+                              : n),
+                          selected:
+                              normalizePhone(phone.text) == normalizePhone(n),
+                          onSelected: (_) => setState(() => phone.text = n),
+                        ),
+                    ]),
+                  ],
+                ),
+              ),
             TextFormField(
               controller: venue,
               decoration: InputDecoration(labelText: tr(context, 'saved_venue')),

@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../core/format.dart';
 import '../core/hijri.dart';
 import '../core/strings.dart';
 import '../data/models.dart';
 import '../data/store.dart';
+import 'flier_screen.dart';
 import 'hijri_picker.dart';
 import 'host_picker.dart';
+import 'share_sheet.dart';
 
 const seriesOptions = [1, 3, 5, 10];
 
@@ -77,6 +78,12 @@ class _EventFormScreenState extends State<EventFormScreen> {
     final t = await showTimePicker(
       context: context,
       initialTime: TimeOfDay(hour: cur ~/ 60, minute: cur % 60),
+      // Always the 12-hour dial with AM/PM, even when the phone's clock is
+      // set to 24-hour time.
+      builder: (c, child) => MediaQuery(
+        data: MediaQuery.of(c).copyWith(alwaysUse24HourFormat: false),
+        child: child!,
+      ),
     );
     if (t == null) return;
     setState(() {
@@ -101,6 +108,21 @@ class _EventFormScreenState extends State<EventFormScreen> {
       host = h;
     });
   }
+
+  /// A saved event's flier changes at once (like the viewer's Replace and
+  /// Remove); a new event's is kept with the form until Save.
+  Future<void> _setFlier(String? name) async {
+    if (!isNew) await store.setFlier(widget.existing!, name);
+    if (mounted) setState(() => e.flier = name);
+  }
+
+  Future<void> _addFlier() async {
+    final name = await pickFlier();
+    if (name != null) await _setFlier(name);
+  }
+
+  void _viewFlier() => Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FlierScreen(name: e.flier!, onChanged: _setFlier)));
 
   void _collect() {
     e
@@ -210,8 +232,8 @@ class _EventFormScreenState extends State<EventFormScreen> {
   }
 
   void _share() {
-    final saved = widget.existing!;
-    SharePlus.instance.share(ShareParams(text: shareText(saved, isUr(context))));
+    final saved = store.eventById(widget.existing!.id!) ?? widget.existing!;
+    showEventShare(context, saved);
   }
 
   @override
@@ -269,6 +291,27 @@ class _EventFormScreenState extends State<EventFormScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           children: [
+            if (e.takesFlier) ...[
+              e.flier == null
+                  ? OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(48),
+                        foregroundColor: theme.colorScheme.onSurface,
+                        side: const BorderSide(color: Color(0x668E8E93)),
+                      ),
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      label: Text(tr(context, 'add_flier')),
+                      onPressed: _addFlier,
+                    )
+                  : FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48)),
+                      icon: const Icon(Icons.image_outlined),
+                      label: Text(tr(context, 'view_flier')),
+                      onPressed: _viewFlier,
+                    ),
+              const SizedBox(height: 12),
+            ],
             SegmentedButton<EventType>(
               showSelectedIcon: false,
               segments: [

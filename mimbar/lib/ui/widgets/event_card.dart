@@ -137,6 +137,12 @@ class EventBody extends StatelessWidget {
                 ),
               ),
             ),
+            if (e.shownFlier != null)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 6),
+                child: Icon(Icons.image_outlined,
+                    size: 16, color: muted, semanticLabel: tr(context, 'flier')),
+              ),
             StatusChip(e.status),
           ]),
           if (subtitle.isNotEmpty)

@@ -61,6 +61,8 @@ kotlin {
 
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    // FileProvider, for handing fliers to Facebook / WhatsApp.
+    implementation("androidx.core:core-ktx:1.13.1")
 }
 
 flutter {

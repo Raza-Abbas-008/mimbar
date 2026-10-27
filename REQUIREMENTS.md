@@ -73,6 +73,15 @@ Bottom navigation with three tabs, and a **gear icon** in the top bar that opens
 ### 3.3 Nikkah
 - [ ] E11. A Nikkah has the same fields as a Majlis or Milad (§3.1). There are no groom, bride, wakeel or witness fields.
 
+### 3.3a Flier (Majlis and Milad only)
+- [ ] E12. A Majlis or Milad can have **one optional flier** (an image). Nikkah events never show flier options.
+- [ ] E13. The flier is hidden until the event is opened. Directly under the title, above everything else, a button reads **Add flier** (none yet) or **View flier** (one attached).
+- [ ] E14. **Add flier** opens the phone's photo gallery. The image is shrunk to about 1600 px (a few hundred KB) before it is stored.
+- [ ] E15. **View flier** opens it full screen with pinch-to-zoom and four actions: **Share** (the flier only), **Replace**, **Save to gallery**, **Remove** (after a confirmation).
+- [ ] E16. Mimbar appears in other apps' **Share** menu for images. Sharing a flier from WhatsApp to Mimbar lists the upcoming (then recent past) Majlis and Milad events, and tapping one attaches it, asking first if it would replace an existing flier.
+- [ ] E17. Event cards in lists show a small image icon when the event has a flier.
+- [ ] E18. With cloud sync on, fliers sync to the other phone (Supabase Storage, private to the account). Unused fliers are deleted from the cloud.
+
 ### 3.4 Majlis series (Individual / 3 / Khamsa / Ashra)
 - [ ] E13. For **Majlis only**, the form has a **Series** dropdown: Individual *(default)*, 3 days, Khamsa (5), Ashra (10).
 - [ ] E14. Choosing 3/5/10 and saving creates that many linked Majlis events on consecutive Hijri days, starting on the chosen date, each with the same host, venue, time and topic.
@@ -110,7 +119,7 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 
 ## 6. Host directory
 
-- [ ] H1. Every host has a **name**, a **phone number** and a saved **default venue/address**. The phone number is the unique key.
+- [ ] H1. Every host has a **name**, a **phone number** and an optional saved **default location**. The phone number is the unique key.
 - [ ] H1a. Selecting a host pre-fills the event's venue with the host's saved venue.
 - [ ] H1b. The venue can be edited for that one event without changing the host's saved venue. The saved venue changes only when the host itself is edited.
 - [ ] H2. A host is **optional**. When creating or editing an event, the user can leave it empty, choose **Select existing host** (searchable by name or phone) or **Create new host**, or remove the selected host.
@@ -118,6 +127,8 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 - [ ] H4. Phone numbers are normalised before comparison (spaces and dashes ignored; `03xx…` and `+923xx…` treated as the same). *(default)*
 - [ ] H5. Editing a host's name updates it on all of that host's events.
 - [ ] H6. A host's detail view lists all of their past and upcoming events.
+- [ ] H7. The New host dialog starts with **Import from contacts**, which opens the phone's contact picker. Picking a contact fills in its name and number (the contact's default number, else the most recently added). Other numbers show as chips to switch between. Both fields stay editable, and typing a host in by hand still works.
+- [ ] H8. Importing needs the Contacts permission, asked the first time. If it is refused, the dialog says how to allow it. Mimbar reads only the picked contact.
 
 ---
 
@@ -142,9 +153,14 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 - [ ] S10. **Filter chips** filter by type (Majlis / Milad / Nikkah) and by status.
 
 ### 7.3 Calendar
-- [ ] S11. The top half is a month calendar grid; the bottom half lists all events in the displayed month.
+- [ ] S11. A pinned month header (‹ month ›, calendar on/off, Hijri/Gregorian) sits above a compact month grid (about a third of the screen) and the list of that month's events. The grid scrolls away with the list; the header stays.
+- [ ] S11a. The calendar on/off button hides the grid, leaving only the chronological list for the same month. Each phone remembers its choice.
 - [ ] S12. A toggle switches the month view between **Hijri month** and **Gregorian month**, and the list follows the same range.
-- [ ] S13. Days with events show markers in the type colours, and clash days show yellow.
+- [ ] S13. Day markers (Majlis black, Milad red, Nikkah green), at the bottom of the day box:
+  - one type of event → a wide bar in its colour, with the count in the middle when there is more than one;
+  - several types → one dot per type, in the order Majlis, Milad, Nikkah, each with its count when above one (e.g. 1 Nikkah + 3 Milad → a red dot with 3 and a plain green dot);
+  - a clash on that day → a small yellow warning in the day's corner;
+  - cancelled events are not counted; past days' markers are faded.
 - [ ] S14. Swiping or using arrows changes the month. Tapping a day scrolls or filters the list to that day.
 - [ ] S15. Clashing events appear in the list as "Event 1 + Event 2 (Clashing)".
 
@@ -172,8 +188,10 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 
 ## 10. Sharing
 
-- [ ] SH1. Each event has a **Share** button that opens the Android share sheet (WhatsApp, SMS, etc.).
+- [ ] SH1. Each event's **Share** button opens a sheet: first **Text / Flier / Both** (the flier choices only when the event has one), then **Facebook**, **WhatsApp** or **More…** (the Android share sheet).
 - [ ] SH2. The shared text is formatted and includes the type, topic, Hijri and Gregorian date, start–end time, venue and host (when set).
+- [ ] SH3. Facebook opens straight in its post composer with the flier. Facebook doesn't accept text from other apps, so the text is copied and a note says to paste it as the caption.
+- [ ] SH4. If Facebook or WhatsApp isn't installed, the app says so and falls back to the Android share sheet.
 
 ---
 
@@ -220,6 +238,7 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 - [ ] NF3. The app opens to Home in under 2 seconds on a mid-range phone.
 - [ ] NF4. The grid and lists stay smooth with 2,000+ events (several years of bookings).
 - [ ] NF5. Runs on Android 8.0+ (API 26+).
+- [ ] NF6. The screens use a white background. Time pickers always show the 12-hour dial with AM/PM, even when the phone is set to 24-hour time.
 
 ---
 
@@ -241,7 +260,7 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 | Backup file | `file_picker` (save/open) + `share_plus` (send) |
 | Cloud sync | `supabase_flutter` (Postgres + auth + realtime) + `connectivity_plus`; schema in `supabase/schema.sql`. Last-write-wins per row by edit time, deletes kept as tombstones. |
 
-**Android permissions:** `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, and `INTERNET` / `ACCESS_NETWORK_STATE` for cloud sync.
+**Android permissions:** `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM` / `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `INTERNET` / `ACCESS_NETWORK_STATE` for cloud sync, `READ_CONTACTS` for importing hosts, and `WRITE_EXTERNAL_STORAGE` (Android 9 and older only) for saving fliers to the gallery.
 
 **Distribution:** built locally with `build.ps1`, then published as a GitHub Release. Download the APK on the phone from the repo's Releases page (or copy it over USB/WhatsApp), allow "Install unknown apps" once, then install. No Play Store.
 

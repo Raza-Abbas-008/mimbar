@@ -50,6 +50,9 @@ class Event {
   int? seriesIndex;
   int? seriesTotal;
 
+  /// File name of the attached flier (Majlis and Milad only), or null.
+  String? flier;
+
   Event({
     this.id,
     required this.type,
@@ -64,6 +67,7 @@ class Event {
     this.seriesId,
     this.seriesIndex,
     this.seriesTotal,
+    this.flier,
   });
 
   /// Length in minutes, handling events that run past midnight.
@@ -74,6 +78,12 @@ class Event {
 
   bool get isActive =>
       status == EventStatus.tentative || status == EventStatus.confirmed;
+
+  /// Fliers are offered for Majlis and Milad, never Nikkah.
+  bool get takesFlier => type != EventType.nikkah;
+
+  /// The flier to show or share, if this event type takes one.
+  String? get shownFlier => takesFlier ? flier : null;
 
   Event copy() => Event.fromMap(toMap());
 
@@ -97,6 +107,7 @@ class Event {
         'series_id': seriesId,
         'series_index': seriesIndex,
         'series_total': seriesTotal,
+        'flier': flier,
       };
 
   factory Event.fromMap(Map<String, Object?> m) {
@@ -116,6 +127,7 @@ class Event {
       seriesId: m['series_id'] as String?,
       seriesIndex: m['series_index'] as int?,
       seriesTotal: m['series_total'] as int?,
+      flier: m['flier'] as String?,
     );
   }
 }

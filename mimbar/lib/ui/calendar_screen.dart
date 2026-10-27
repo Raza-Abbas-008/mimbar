@@ -3,14 +3,16 @@ import 'package:flutter/services.dart';
 
 import '../core/format.dart';
 import '../core/hijri.dart';
+import '../core/markers.dart';
 import '../core/strings.dart';
 import '../data/models.dart';
 import '../data/store.dart';
 import 'widgets/event_card.dart';
 import 'widgets/month_grid.dart';
 
-/// Month grid on the top half, that month's events (or the tapped day's) on
-/// the bottom half. The month can be a Hijri or a Gregorian month.
+/// A pinned month header, then (when switched on) a compact month grid that
+/// scrolls away with the list of that month's events, or the tapped day's.
+/// The month can be a Hijri or a Gregorian month.
 ///
 /// Months live in a PageView so the grid follows the finger 1:1 and snaps
 /// with the release velocity; in Urdu the paging direction mirrors.
@@ -105,18 +107,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
     }).toList();
   }
 
-  Map<int, List<Color>> _markers(List<Event> inMonth) {
-    final markers = <int, List<Color>>{};
+  Map<int, DayMarks> _markers(List<Event> inMonth) {
+    final byDay = <int, List<Event>>{};
     for (final e in inMonth) {
-      final c = e.status == EventStatus.cancelled
-          ? const Color(0xFFBDBDBD)
-          : store.isClashing(e)
-              ? clashColor
-              : typeColor(e.type);
-      final list = markers.putIfAbsent(gKey(store.gregOf(e)), () => []);
-      if (!list.contains(c)) list.add(c);
+      byDay.putIfAbsent(gKey(store.gregOf(e)), () => []).add(e);
     }
-    return markers;
+    return {
+      for (final MapEntry(key: k, value: list) in byDay.entries)
+        k: ?marksFor(list, store.isClashing),
+    };
+  }
+
+  static const _rowHeight = 46.0;
+
+  void _toggleCalendar() {
+    HapticFeedback.selectionClick();
+    setState(() => selectedKey = null);
+    store.setCalendarOn(!store.calendarOn);
   }
 
   @override
@@ -138,110 +145,150 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ? '${hijriMonthName(m, ur)} $y${ur ? 'ھ' : ''}'
         : '${gregMonthName(m, ur, full: true)} $y';
 
-    return LayoutBuilder(builder: (context, box) {
-      return Column(children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 12, 0),
-          child: Row(children: [
-            IconButton(
-                onPressed: () => _step(-1),
-                icon: const Icon(Icons.chevron_left)),
-            Expanded(
-              child: GestureDetector(
-                onTap: _goToday,
-                child: AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 180),
-                  child: Text(title,
-                      key: ValueKey(title),
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.titleMedium),
-                ),
+    final on = store.calendarOn;
+    final header = Padding(
+      padding: const EdgeInsetsDirectional.fromSTEB(4, 2, 8, 2),
+      child: Row(children: [
+        IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _step(-1),
+            icon: const Icon(Icons.chevron_left)),
+        Expanded(
+          child: GestureDetector(
+            onTap: _goToday,
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 180),
+              // Long month names shrink rather than wrap.
+              child: FittedBox(
+                key: ValueKey(title),
+                fit: BoxFit.scaleDown,
+                child: Text(title,
+                    maxLines: 1,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleMedium),
               ),
             ),
-            IconButton(
-                onPressed: () => _step(1),
-                icon: const Icon(Icons.chevron_right)),
-            SegmentedButton<bool>(
-              showSelectedIcon: false,
-              style: const ButtonStyle(visualDensity: VisualDensity.compact),
-              segments: [
-                ButtonSegment(value: true, label: Text(tr(context, 'hijri_view'))),
-                ButtonSegment(value: false, label: Text(tr(context, 'greg_view'))),
-              ],
-              selected: {hijriMode},
-              onSelectionChanged: (s) => _toggleMode(s.first),
-            ),
-          ]),
-        ),
-        SizedBox(
-          height: box.maxHeight * 0.5,
-          child: PageView.builder(
-            controller: _pager,
-            onPageChanged: (p) => setState(() {
-              page = p;
-              selectedKey = null;
-            }),
-            itemBuilder: (context, p) {
-              final (py, pm) = shiftMonth(baseY, baseM, p - _origin);
-              final pc = _cells(py, pm, ur);
-              return Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: MonthGrid(
-                  ur: ur,
-                  cells: pc,
-                  markers: _markers(_eventsIn(pc)),
-                  selectedKey: p == page ? selectedKey : null,
-                  onTap: (c) {
-                    HapticFeedback.selectionClick();
-                    setState(() {
-                      final k = gKey(c.greg);
-                      selectedKey = selectedKey == k ? null : k;
-                    });
-                  },
-                ),
-              );
-            },
           ),
         ),
-        const Divider(height: 1),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOutCubic,
-          child: selectedKey == null
-              ? const SizedBox(width: double.infinity)
-              : Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
-                  child: Row(children: [
-                    Expanded(
-                      child: Builder(builder: (_) {
-                        final c =
-                            cells.firstWhere((c) => gKey(c.greg) == selectedKey);
-                        return Text(
-                            '${fmtHijri(c.hijri, ur)} · ${fmtGreg(c.greg, ur)}',
-                            style: theme.textTheme.labelLarge);
-                      }),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => setState(() => selectedKey = null),
-                    ),
-                  ]),
-                ),
+        IconButton(
+            visualDensity: VisualDensity.compact,
+            onPressed: () => _step(1),
+            icon: const Icon(Icons.chevron_right)),
+        on
+            ? IconButton.filled(
+                visualDensity: VisualDensity.compact,
+                tooltip: tr(context, 'hide_calendar'),
+                onPressed: _toggleCalendar,
+                icon: const Icon(Icons.calendar_month_outlined, size: 20))
+            : IconButton.outlined(
+                visualDensity: VisualDensity.compact,
+                tooltip: tr(context, 'show_calendar'),
+                onPressed: _toggleCalendar,
+                icon: const Icon(Icons.event_busy_outlined, size: 20)),
+        const SizedBox(width: 4),
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(visualDensity: VisualDensity.compact),
+          segments: [
+            ButtonSegment(value: true, label: Text(tr(context, 'hijri_view'))),
+            ButtonSegment(value: false, label: Text(tr(context, 'greg_view'))),
+          ],
+          selected: {hijriMode},
+          onSelectionChanged: (s) => _toggleMode(s.first),
         ),
-        Expanded(
-          child: groups.isEmpty
-              ? Center(
+      ]),
+    );
+
+    final grid = AnimatedContainer(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+      height: MonthGrid.heightFor(cells, _rowHeight) + 6,
+      child: PageView.builder(
+        controller: _pager,
+        onPageChanged: (p) => setState(() {
+          page = p;
+          selectedKey = null;
+        }),
+        itemBuilder: (context, p) {
+          final (py, pm) = shiftMonth(baseY, baseM, p - _origin);
+          final pc = _cells(py, pm, ur);
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 6),
+            child: Align(
+              alignment: Alignment.topCenter,
+              child: MonthGrid(
+                ur: ur,
+                cells: pc,
+                rowHeight: _rowHeight,
+                markers: _markers(_eventsIn(pc)),
+                selectedKey: p == page ? selectedKey : null,
+                onTap: (c) {
+                  HapticFeedback.selectionClick();
+                  setState(() {
+                    final k = gKey(c.greg);
+                    selectedKey = selectedKey == k ? null : k;
+                  });
+                },
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    final dayBar = selectedKey == null
+        ? null
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 0),
+            child: Row(children: [
+              Expanded(
+                child: Builder(builder: (_) {
+                  final c = cells.firstWhere((c) => gKey(c.greg) == selectedKey);
+                  return Text('${fmtHijri(c.hijri, ur)} · ${fmtGreg(c.greg, ur)}',
+                      style: theme.textTheme.labelLarge);
+                }),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () => setState(() => selectedKey = null),
+              ),
+            ]),
+          );
+
+    return Column(children: [
+      header,
+      const Divider(height: 1),
+      Expanded(
+        child: CustomScrollView(slivers: [
+          if (on) ...[
+            SliverToBoxAdapter(child: grid),
+            const SliverToBoxAdapter(child: Divider(height: 1)),
+          ],
+          if (dayBar != null) SliverToBoxAdapter(child: dayBar),
+          if (groups.isEmpty)
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Center(
                   child: Text(tr(context, 'no_events'),
-                      style: TextStyle(color: theme.colorScheme.onSurfaceVariant)))
-              : ListView.separated(
-                  padding: EdgeInsets.fromLTRB(
-                      12, 10, 12, MediaQuery.paddingOf(context).bottom + 16),
-                  itemCount: groups.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 10),
-                  itemBuilder: (_, i) => EventGroupCard(groups[i]),
+                      style:
+                          TextStyle(color: theme.colorScheme.onSurfaceVariant)),
                 ),
-        ),
-      ]);
-    });
+              ),
+            )
+          else
+            SliverPadding(
+              padding: EdgeInsets.fromLTRB(
+                  12, 10, 12, MediaQuery.paddingOf(context).bottom + 16),
+              sliver: SliverList.separated(
+                itemCount: groups.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                itemBuilder: (_, i) => EventGroupCard(groups[i]),
+              ),
+            ),
+        ]),
+      ),
+    ]);
   }
 }

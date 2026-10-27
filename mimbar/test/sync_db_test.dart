@@ -217,7 +217,9 @@ void main() {
     final hostId = await v1.insert(
         'hosts', {'name': 'Old', 'phone': '03001234567', 'venue': ''});
     await v1.insert('events', {
-      ...ev(hostId: hostId, topic: 'old').toMap()..remove('id'),
+      ...ev(hostId: hostId, topic: 'old').toMap()
+        ..remove('id')
+        ..remove('flier'), // not a v1 column
     });
     await v1.insert('settings', {'key': 'offset', 'value': '-1'});
 
@@ -235,5 +237,53 @@ void main() {
     expect(events.single['uid'], isNotNull);
     expect(events.single['host_uid'], (await db.dirtyHosts()).single['uid']);
     expect(await db.dirtySettings(), isNotNull);
+  });
+
+  group('fliers', () {
+    test('adding queues an upload; replacing queues the old one to delete',
+        () async {
+      final a = await phone();
+      await a.saveEvents([ev(topic: 'x')]);
+      final id = (await a.loadEvents()).single.id!;
+      await a.setFlier(id, 'one.jpg');
+      expect(await a.pendingUploads(), ['one.jpg']);
+      await a.clearUpload('one.jpg');
+      await a.setFlier(id, 'two.jpg');
+      expect(await a.pendingUploads(), ['two.jpg']);
+      expect(await a.pendingTrash(), ['one.jpg']);
+    });
+
+    test('a flier shared by series days is kept until no day uses it',
+        () async {
+      final a = await phone();
+      await a.saveEvents([ev()..flier = 's.jpg', ev()..flier = 's.jpg']);
+      final ids = [for (final e in await a.loadEvents()) e.id!];
+      await a.setFlier(ids[0], null);
+      expect(await a.pendingTrash(), isEmpty);
+      await a.deleteEvent(ids[1]);
+      expect(await a.pendingTrash(), ['s.jpg']);
+    });
+
+    test('the flier name syncs to the other phone', () async {
+      final cloud = FakeCloud();
+      final a = await phone(), b = await phone();
+      await a.saveEvents([ev()..flier = 'f.jpg']);
+      await syncPhone(a, cloud);
+      await syncPhone(b, cloud);
+      expect((await b.loadEvents()).single.flier, 'f.jpg');
+      expect(await b.pendingUploads(), isEmpty);
+    });
+
+    test('an older cloud row without the flier column keeps the local one',
+        () async {
+      final a = await phone();
+      await a.saveEvents([ev()..flier = 'f.jpg']);
+      final row = Map<String, dynamic>.from((await a.dirtyEvents()).single)
+        ..remove('flier')
+        ..['updated_at'] = DateTime.now().millisecondsSinceEpoch + 1000
+        ..['deleted'] = false;
+      await a.applyEvents([row]);
+      expect((await a.loadEvents()).single.flier, 'f.jpg');
+    });
   });
 }

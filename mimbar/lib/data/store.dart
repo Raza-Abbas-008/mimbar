@@ -29,9 +29,20 @@ class AppStore extends ChangeNotifier {
 
   bool get ur => settings.lang == 'ur';
 
+  /// Whether the Calendar tab shows the month grid. Kept per phone, not
+  /// synced.
+  bool calendarOn = true;
+
   Future<void> init() async {
     await db.open();
+    calendarOn = await db.getMeta('calendar_on') != '0';
     await _reload();
+  }
+
+  Future<void> setCalendarOn(bool on) async {
+    calendarOn = on;
+    notifyListeners();
+    await db.setMeta('calendar_on', on ? '1' : '0');
   }
 
   Future<void> _reload() async {
@@ -185,6 +196,14 @@ class AppStore extends ChangeNotifier {
 
   Future<void> saveEvents(List<Event> list) async {
     await db.saveEvents(list);
+    events = await db.loadEvents();
+    await _refreshDerived();
+    sync.request();
+  }
+
+  /// Attaches, replaces or (with null) removes a saved event's flier.
+  Future<void> setFlier(Event e, String? name) async {
+    await db.setFlier(e.id!, name);
     events = await db.loadEvents();
     await _refreshDerived();
     sync.request();

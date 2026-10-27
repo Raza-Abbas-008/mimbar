@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../data/store.dart';
+import 'fliers.dart';
 
 final sync = SyncService();
 
@@ -114,8 +116,10 @@ class SyncService extends ChangeNotifier {
     _retry?.cancel();
     notifyListeners();
     try {
+      await _pushFliers();
       await _push();
       if (await _pull()) await store.reloadAll();
+      await _pullFliers();
       lastSynced = DateTime.now();
       await store.db
           .setMeta('last_synced', '${lastSynced!.millisecondsSinceEpoch}');
@@ -132,6 +136,64 @@ class SyncService extends ChangeNotifier {
       _again = false;
       request(delay: Duration.zero);
     }
+  }
+
+  String _flierPath(String name) => '${_c.auth.currentUser!.id}/$name';
+
+  StorageFileApi get _bucket => _c.storage.from('fliers');
+
+  /// Uploads new fliers before the event rows that point at them, then
+  /// deletes old ones nothing uses any more.
+  Future<void> _pushFliers() async {
+    final db = store.db;
+    for (final name in await db.pendingUploads()) {
+      if (Fliers.has(name)) {
+        await _bucket.upload(_flierPath(name), Fliers.file(name),
+            fileOptions:
+                const FileOptions(upsert: true, contentType: 'image/jpeg'));
+      }
+      await db.clearUpload(name);
+    }
+    final trash = await db.pendingTrash();
+    if (trash.isNotEmpty) {
+      await _bucket.remove([for (final n in trash) _flierPath(n)]);
+      await db.clearTrash(trash);
+    }
+  }
+
+  /// Downloads fliers the other phone added, and drops local files nothing
+  /// uses. A flier that fails to download is retried next sync.
+  Future<void> _pullFliers() async {
+    final db = store.db;
+    final used = await db.referencedFliers();
+    var got = false;
+    for (final name in used) {
+      if (Fliers.has(name)) continue;
+      got |= await _download(name);
+    }
+    await Fliers.clean({...used, ...await db.uploadQueue()});
+    if (got) notifyListeners();
+  }
+
+  Future<bool> _download(String name) async {
+    try {
+      final bytes = await _bucket.download(_flierPath(name));
+      await Fliers.file(name).writeAsBytes(bytes, flush: true);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// The flier's file, downloading it first if needed. Null when it isn't
+  /// on this phone and can't be fetched right now.
+  Future<File?> flierFile(String name) async {
+    if (Fliers.has(name)) return Fliers.file(name);
+    if (signedIn && await _download(name)) {
+      notifyListeners();
+      return Fliers.file(name);
+    }
+    return null;
   }
 
   Future<void> _push() async {

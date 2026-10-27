@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'data/store.dart';
+import 'services/fliers.dart';
+import 'services/native.dart';
 import 'services/notifications.dart';
 import 'services/sync.dart';
+import 'ui/attach_flier_screen.dart';
 import 'ui/event_form_screen.dart';
 import 'ui/shell.dart';
 
@@ -12,6 +15,7 @@ final navigatorKey = GlobalKey<NavigatorState>();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Notifs.init(onTap: openEventById);
+  await Fliers.init();
   await store.init();
   await sync.init();
   runApp(const MimbarApp());
@@ -21,7 +25,16 @@ Future<void> main() async {
     WidgetsBinding.instance
         .addPostFrameCallback((_) => openEventById(launchId));
   }
+  // An image shared into Mimbar (e.g. a flier from WhatsApp).
+  NativeBridge.onSharedImage(openAttachFlier);
+  final shared = await NativeBridge.takeSharedImage();
+  if (shared != null) {
+    WidgetsBinding.instance.addPostFrameCallback((_) => openAttachFlier(shared));
+  }
 }
+
+void openAttachFlier(String path) => navigatorKey.currentState?.push(
+    MaterialPageRoute(builder: (_) => AttachFlierScreen(imagePath: path)));
 
 void openEventById(int id) {
   final e = store.eventById(id);
@@ -31,7 +44,10 @@ void openEventById(int id) {
 }
 
 const ink = Color(0xFF111111);
-const canvas = Color(0xFFF5F5F7);
+const canvas = Colors.white;
+
+/// Light grey for text fields and inset panels on the white canvas.
+const fieldFill = Color(0xFFF2F2F7);
 const hairline = Color(0x1A000000);
 
 /// Monochrome, restrained theme: colour is reserved for meaning (the event
@@ -139,7 +155,7 @@ ThemeData buildTheme(bool ur) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: Colors.white,
+      fillColor: fieldFill,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: hairline),

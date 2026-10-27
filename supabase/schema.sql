@@ -39,6 +39,9 @@ create table if not exists public.events (
   server_ts     timestamptz not null default clock_timestamp()
 );
 
+-- v1.2: fliers (file name in the 'fliers' storage bucket).
+alter table public.events add column if not exists flier text;
+
 create table if not exists public.settings (
   user_id    uuid primary key default auth.uid() references auth.users(id) on delete cascade,
   data       jsonb not null default '{}',
@@ -100,3 +103,13 @@ begin
     end if;
   end loop;
 end $$;
+
+-- Flier images: a private bucket, one folder per account (<user id>/<file>).
+insert into storage.buckets (id, name, public)
+values ('fliers', 'fliers', false)
+on conflict (id) do nothing;
+
+drop policy if exists "fliers own folder" on storage.objects;
+create policy "fliers own folder" on storage.objects for all to authenticated
+  using (bucket_id = 'fliers' and (storage.foldername(name))[1] = auth.uid()::text)
+  with check (bucket_id = 'fliers' and (storage.foldername(name))[1] = auth.uid()::text);

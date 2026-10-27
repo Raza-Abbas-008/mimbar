@@ -25,7 +25,7 @@ const hostSyncCols = ['name', 'phone', 'venue'];
 const eventSyncCols = [
   'type', 'h_year', 'h_month', 'h_day', 'greg_override', 'start_min',
   'end_min', 'venue', 'topic', 'status', 'series_id', 'series_index',
-  'series_total',
+  'series_total', 'flier',
 ];
 
 /// Local SQLite store. Every row has a `uid` shared across phones, an
@@ -40,14 +40,16 @@ class AppDb {
     _db = await (factory ?? databaseFactory).openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 3,
         onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
         onCreate: (db, _) async {
           await createV1(db);
           await _upgradeTo2(db, fresh: true);
+          await _upgradeTo3(db);
         },
         onUpgrade: (db, from, _) async {
           if (from < 2) await _upgradeTo2(db, fresh: false);
+          if (from < 3) await _upgradeTo3(db);
         },
       ),
     );
@@ -122,6 +124,15 @@ class AppDb {
         {'key': 'settings_updated_at', 'value': customised ? '$now' : '0'});
     await db.insert(
         'meta', {'key': 'settings_dirty', 'value': customised ? '1' : '0'});
+  }
+
+  /// v3: fliers. The image files live in their own folder; these queues
+  /// remember which still need uploading, and which old ones to delete
+  /// from the cloud once nothing refers to them.
+  static Future<void> _upgradeTo3(Database db) async {
+    await db.execute('ALTER TABLE events ADD COLUMN flier TEXT');
+    await db.execute('CREATE TABLE flier_uploads(name TEXT PRIMARY KEY)');
+    await db.execute('CREATE TABLE flier_trash(name TEXT PRIMARY KEY)');
   }
 
   // ----------------------------------------------------------------- meta
@@ -201,21 +212,96 @@ class AppDb {
         if (e.id == null) {
           e.id = await txn.insert('events',
               {...map, 'uid': newUid(), 'updated_at': _now(), 'dirty': 1});
+          await _flierChanged(txn, null, e.flier);
         } else {
+          final old = await _flierOf(txn, e.id!);
           await txn.update('events', map, where: 'id = ?', whereArgs: [e.id]);
           await _touch(txn, 'events', e.id!);
+          await _flierChanged(txn, old, e.flier);
         }
       }
     });
   }
 
+  /// Attaches, replaces (or with null removes) an event's flier.
+  Future<void> setFlier(int id, String? name) => _db.transaction((txn) async {
+        final old = await _flierOf(txn, id);
+        await txn.update('events', {'flier': name},
+            where: 'id = ?', whereArgs: [id]);
+        await _touch(txn, 'events', id);
+        await _flierChanged(txn, old, name);
+      });
+
+  static Future<String?> _flierOf(DatabaseExecutor ex, int id) async =>
+      (await ex.query('events',
+              columns: ['flier'], where: 'id = ?', whereArgs: [id]))
+          .firstOrNull?['flier'] as String?;
+
+  /// Queues a new flier for upload and an old one for deletion. Deletion
+  /// only happens once no event uses it (series days share one flier).
+  static Future<void> _flierChanged(
+      DatabaseExecutor ex, String? old, String? now) async {
+    if (old == now) return;
+    if (now != null) {
+      await ex.insert('flier_uploads', {'name': now},
+          conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+    if (old != null) {
+      await ex.insert('flier_trash', {'name': old},
+          conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
   Future<void> deleteEvent(int id) => _db.transaction((txn) async {
         final row = await txn.query('events',
-            columns: ['uid'], where: 'id = ?', whereArgs: [id]);
+            columns: ['uid', 'flier'], where: 'id = ?', whereArgs: [id]);
         if (row.isEmpty) return;
         await txn.delete('events', where: 'id = ?', whereArgs: [id]);
         await _tombstone(txn, 'events', row.first['uid'] as String, _now());
+        await _flierChanged(txn, row.first['flier'] as String?, null);
       });
+
+  /// Every flier name some event still uses.
+  Future<Set<String>> referencedFliers() async => {
+        for (final r in await _db.rawQuery(
+            'SELECT DISTINCT flier FROM events WHERE flier IS NOT NULL'))
+          r['flier'] as String
+      };
+
+  /// Fliers waiting to upload that an event still uses. Queue entries no
+  /// event uses any more are dropped.
+  Future<List<String>> pendingUploads() => _db.transaction((txn) async {
+        await txn.rawDelete('DELETE FROM flier_uploads WHERE name NOT IN '
+            '(SELECT flier FROM events WHERE flier IS NOT NULL)');
+        return [
+          for (final r in await txn.query('flier_uploads'))
+            r['name'] as String
+        ];
+      });
+
+  Future<Set<String>> uploadQueue() async =>
+      {for (final r in await _db.query('flier_uploads')) r['name'] as String};
+
+  Future<void> clearUpload(String name) =>
+      _db.delete('flier_uploads', where: 'name = ?', whereArgs: [name]);
+
+  /// Old fliers no event uses any more. Ones in use again are dropped from
+  /// the queue.
+  Future<List<String>> pendingTrash() => _db.transaction((txn) async {
+        await txn.rawDelete('DELETE FROM flier_trash WHERE name IN '
+            '(SELECT flier FROM events WHERE flier IS NOT NULL)');
+        return [
+          for (final r in await txn.query('flier_trash')) r['name'] as String
+        ];
+      });
+
+  Future<void> clearTrash(List<String> names) async {
+    final b = _db.batch();
+    for (final n in names) {
+      b.delete('flier_trash', where: 'name = ?', whereArgs: [n]);
+    }
+    await b.commit(noResult: true);
+  }
 
   Future<void> markDone(List<int> ids) async {
     if (ids.isEmpty) return;
@@ -323,6 +409,8 @@ class AppDb {
   Future<void> resetSync() => _db.transaction((txn) async {
         await txn.rawUpdate('UPDATE hosts SET dirty = 1');
         await txn.rawUpdate('UPDATE events SET dirty = 1');
+        await txn.rawInsert('INSERT OR IGNORE INTO flier_uploads(name) '
+            'SELECT DISTINCT flier FROM events WHERE flier IS NOT NULL');
         if (await _metaInt('settings_updated_at', txn) > 0) {
           await setMeta('settings_dirty', '1', txn);
         }
@@ -471,7 +559,10 @@ class AppDb {
             repointed = hostId != null && resolved != hostUid;
           }
           final values = {
-            for (final c in eventSyncCols) c: r[c],
+            // Only columns the cloud sent, so an older schema can't blank
+            // a newer column here.
+            for (final c in eventSyncCols)
+              if (r.containsKey(c)) c: r[c],
             'host_id': hostId,
             'uid': uid,
             // A host merged on this phone: upload the corrected link.
