@@ -3,6 +3,7 @@ package com.mimbar.mimbar
 import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -36,7 +37,10 @@ class MainActivity : FlutterActivity() {
             setMethodCallHandler { call, result ->
                 when (call.method) {
                     "shareTo" -> result.success(
-                        shareTo(call.argument("package")!!, call.argument("text"), call.argument("path"))
+                        shareTo(
+                            call.argument("package")!!, call.argument("text"),
+                            call.argument<List<String>>("paths") ?: emptyList()
+                        )
                     )
                     "pickContact" -> pickContact(result)
                     "takeSharedImage" -> {
@@ -57,12 +61,20 @@ class MainActivity : FlutterActivity() {
 
     // ------------------------------------------------------------ sharing
 
-    private fun shareTo(pkg: String, text: String?, path: String?): Boolean {
-        val send = Intent(Intent.ACTION_SEND).setPackage(pkg)
-        if (path != null) {
-            val uri = FileProvider.getUriForFile(this, "$packageName.mimbar.files", File(path))
+    private fun shareTo(pkg: String, text: String?, paths: List<String>): Boolean {
+        val uris = paths.map { FileProvider.getUriForFile(this, "$packageName.mimbar.files", File(it)) }
+        val send = Intent(if (uris.size > 1) Intent.ACTION_SEND_MULTIPLE else Intent.ACTION_SEND)
+            .setPackage(pkg)
+        when {
+            uris.size > 1 -> send.putParcelableArrayListExtra(Intent.EXTRA_STREAM, ArrayList(uris))
+            uris.size == 1 -> send.putExtra(Intent.EXTRA_STREAM, uris[0])
+        }
+        if (uris.isNotEmpty()) {
             send.type = "image/jpeg"
-            send.putExtra(Intent.EXTRA_STREAM, uri)
+            // ClipData carries the read grant for every image, not just one.
+            send.clipData = ClipData.newRawUri(null, uris[0]).apply {
+                uris.drop(1).forEach { addItem(ClipData.Item(it)) }
+            }
             send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         } else {
             send.type = "text/plain"

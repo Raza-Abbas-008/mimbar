@@ -286,4 +286,39 @@ void main() {
       expect((await a.loadEvents()).single.flier, 'f.jpg');
     });
   });
+
+  group('bulk actions', () {
+    test('deleting a host keeps its events, on both phones', () async {
+      final cloud = FakeCloud();
+      final a = await phone(), b = await phone();
+      final h = await a.saveHost(Host(name: 'Abbas', phone: '03001234567'));
+      await a.saveEvents([ev(hostId: h, topic: 'kept')]);
+      await syncPhone(a, cloud);
+      await syncPhone(b, cloud);
+
+      await a.deleteHosts([h]);
+      await syncPhone(a, cloud);
+      await syncPhone(b, cloud);
+      for (final db in [a, b]) {
+        expect(await db.loadHosts(), isEmpty);
+        final e = (await db.loadEvents()).single;
+        expect(e.topic, 'kept');
+        expect(e.hostId, isNull);
+      }
+    });
+
+    test('several events delete and change status together', () async {
+      final cloud = FakeCloud();
+      final a = await phone(), b = await phone();
+      await a.saveEvents([ev(topic: '1'), ev(topic: '2'), ev(topic: '3')]);
+      final ids = [for (final e in await a.loadEvents()) e.id!];
+      await a.setStatus(ids.sublist(0, 2), EventStatus.cancelled);
+      await a.deleteEvents([ids[2]]);
+      await syncPhone(a, cloud);
+      await syncPhone(b, cloud);
+      final onB = await b.loadEvents();
+      expect(onB.map((e) => e.topic), unorderedEquals(['1', '2']));
+      expect(onB.every((e) => e.status == EventStatus.cancelled), isTrue);
+    });
+  });
 }

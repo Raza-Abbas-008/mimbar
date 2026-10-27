@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../core/strings.dart';
 import '../data/models.dart';
+import '../data/store.dart';
 import '../main.dart' show fieldFill;
 import '../services/native.dart';
 import '../services/sync.dart';
@@ -17,23 +18,52 @@ enum _Target { facebook, whatsapp, more }
 
 /// Share an event: choose Text / Flier / Both (the flier options only when
 /// the event has one), then Facebook, WhatsApp or the Android share sheet.
-Future<void> showEventShare(BuildContext context, Event e) async {
+Future<void> showEventShare(BuildContext context, Event e) =>
+    showEventsShare(context, [e]);
+
+/// Share several events as one message in date order. Fliers are offered
+/// only when every event has one; a flier shared by series days goes once.
+Future<void> showEventsShare(BuildContext context, List<Event> events) async {
+  if (events.isEmpty) return;
   final ur = isUr(context);
-  final text = shareText(e, ur);
-  final name = e.shownFlier;
-  final image = name == null ? null : await sync.flierFile(name);
+  final list = [...events]
+    ..sort((a, b) => store.startOf(a).compareTo(store.startOf(b)));
+  final text = list.map((e) => shareText(e, ur)).join('\n\n');
+  final names = <String>[];
+  final allHave = list.every((e) => e.shownFlier != null);
+  if (allHave) {
+    for (final e in list) {
+      if (!names.contains(e.shownFlier)) names.add(e.shownFlier!);
+    }
+  }
+  final images = <File>[];
+  var missing = false;
+  for (final n in names) {
+    final f = await sync.flierFile(n);
+    if (f == null) {
+      missing = true;
+    } else {
+      images.add(f);
+    }
+  }
   if (!context.mounted) return;
-  if (name != null && image == null) _toast(context, tr(context, 'flier_missing'));
-  await _sheet(context, text: text, image: image);
+  if (missing) {
+    images.clear();
+    _toast(context, tr(context, 'flier_missing'));
+  } else if (!allHave && list.any((e) => e.shownFlier != null)) {
+    _toast(context, tr(context, 'some_without_flier'));
+  }
+  await _sheet(context, text: text, images: images);
 }
 
 /// Share just a flier image (from the flier viewer).
 Future<void> showFlierShare(BuildContext context, File image) =>
-    _sheet(context, image: image, choose: false);
+    _sheet(context, images: [image], choose: false);
 
 Future<void> _sheet(BuildContext context,
-    {String? text, File? image, bool choose = true}) async {
+    {String? text, List<File> images = const [], bool choose = true}) async {
   final messenger = ScaffoldMessenger.of(context);
+  final image = images.firstOrNull;
   var what = image == null
       ? _What.text
       : text == null
@@ -99,11 +129,28 @@ Future<void> _sheet(BuildContext context,
                     color: fieldFill, borderRadius: BorderRadius.circular(14)),
                 child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   if (withImage && image != null)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(6),
-                      child: Image.file(image,
-                          width: 64, height: 80, fit: BoxFit.cover, cacheWidth: 200),
-                    ),
+                    Stack(children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Image.file(image,
+                            width: 64, height: 80, fit: BoxFit.cover, cacheWidth: 200),
+                      ),
+                      if (images.length > 1)
+                        PositionedDirectional(
+                          end: 4,
+                          bottom: 4,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                                color: Colors.black87,
+                                borderRadius: BorderRadius.circular(8)),
+                            child: Text('+${images.length - 1}',
+                                style: const TextStyle(
+                                    color: Colors.white, fontSize: 11)),
+                          ),
+                        ),
+                    ]),
                   if (withImage && image != null && withText && text != null)
                     const SizedBox(width: 12),
                   if (withText && text != null)
@@ -133,16 +180,18 @@ Future<void> _sheet(BuildContext context,
   if (picked == null || !context.mounted) return;
   final (w, t) = picked;
   final sendText = w == _What.flier ? null : text;
-  final sendImage = w == _What.text ? null : image;
+  final paths = w == _What.text ? <String>[] : [for (final f in images) f.path];
   final ur = isUr(context);
-  await _send(t, sendText, sendImage?.path, messenger, ur);
+  await _send(t, sendText, paths, messenger, ur);
 }
 
-Future<void> _send(_Target t, String? text, String? path,
+Future<void> _send(_Target t, String? text, List<String> paths,
     ScaffoldMessengerState messenger, bool ur) async {
   Future<void> sheet() => SharePlus.instance.share(ShareParams(
         text: text,
-        files: path == null ? null : [XFile(path, mimeType: 'image/jpeg')],
+        files: paths.isEmpty
+            ? null
+            : [for (final p in paths) XFile(p, mimeType: 'image/jpeg')],
       ));
 
   switch (t) {
@@ -152,8 +201,8 @@ Future<void> _send(_Target t, String? text, String? path,
       // Facebook ignores text from other apps, so put it on the clipboard
       // for pasting as the caption.
       if (text != null) await Clipboard.setData(ClipboardData(text: text));
-      final ok =
-          await NativeBridge.shareTo(NativeBridge.facebook, text: text, path: path);
+      final ok = await NativeBridge.shareTo(NativeBridge.facebook,
+          text: text, paths: paths);
       if (!ok) {
         _show(messenger, '${trL(ur, 'facebook')} ${trL(ur, 'not_installed')}');
         await sheet();
@@ -163,7 +212,7 @@ Future<void> _send(_Target t, String? text, String? path,
     case _Target.whatsapp:
       var ok = false;
       for (final pkg in NativeBridge.whatsapp) {
-        ok = await NativeBridge.shareTo(pkg, text: text, path: path);
+        ok = await NativeBridge.shareTo(pkg, text: text, paths: paths);
         if (ok) break;
       }
       if (!ok) {

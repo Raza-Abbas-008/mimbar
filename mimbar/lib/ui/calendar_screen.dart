@@ -7,6 +7,7 @@ import '../core/markers.dart';
 import '../core/strings.dart';
 import '../data/models.dart';
 import '../data/store.dart';
+import 'selection.dart';
 import 'widgets/event_card.dart';
 import 'widgets/month_grid.dart';
 
@@ -140,6 +141,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         ? inMonth
         : inMonth.where((e) => gKey(store.gregOf(e)) == selectedKey).toList();
     final groups = store.groupForDisplay(shown);
+    eventSelection.setVisible('calendar', [for (final e in shown) e.id!]);
 
     final title = hijriMode
         ? '${hijriMonthName(m, ur)} $y${ur ? 'ھ' : ''}'
@@ -284,7 +286,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               sliver: SliverList.separated(
                 itemCount: groups.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 10),
-                itemBuilder: (_, i) => EventGroupCard(groups[i]),
+                itemBuilder: (_, i) => EventGroupCard(groups[i], selectable: true),
               ),
             ),
         ]),

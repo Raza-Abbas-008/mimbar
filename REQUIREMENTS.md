@@ -129,6 +129,8 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 - [ ] H6. A host's detail view lists all of their past and upcoming events.
 - [ ] H7. The New host dialog starts with **Import from contacts**, which opens the phone's contact picker. Picking a contact fills in its name and number (the contact's default number, else the most recently added). Other numbers show as chips to switch between. Both fields stay editable, and typing a host in by hand still works.
 - [ ] H8. Importing needs the Contacts permission, asked the first time. If it is refused, the dialog says how to allow it. Mimbar reads only the picked contact.
+- [ ] H9. A host can be deleted (from its detail page, or several at once from the list) after a confirmation. Their events keep all their details but no longer have a host; this syncs to the other phone.
+- [ ] H10. The hosts list supports Gmail-style multi-select: long-press starts it, taps add or remove hosts, and the top bar shows "N selected" with **Select all**, **Delete** and ✕. Back leaves selection mode.
 
 ---
 
@@ -164,6 +166,10 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 - [ ] S14. Swiping or using arrows changes the month. Tapping a day scrolls or filters the list to that day.
 - [ ] S15. Clashing events appear in the list as "Event 1 + Event 2 (Clashing)".
 
+### 7.4 Selecting several events (Home, Create, Calendar)
+- [ ] S16. Long-press an event card to start selecting; while anything is selected a tap toggles a card instead of opening it. Selected cards are outlined with a check mark. Each event inside a clash card is selected separately.
+- [ ] S17. The top bar shows "N selected" with ✕, **Select all** (everything the tab is showing, e.g. the filtered grid or the month), **Share**, **Change status** and **Delete** (after a confirmation). Switching tabs or pressing Back clears the selection.
+
 ---
 
 ## 8. Language (English / Urdu)
@@ -192,6 +198,7 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 - [ ] SH2. The shared text is formatted and includes the type, topic, Hijri and Gregorian date, start–end time, venue and host (when set).
 - [ ] SH3. Facebook opens straight in its post composer with the flier. Facebook doesn't accept text from other apps, so the text is copied and a note says to paste it as the caption.
 - [ ] SH4. If Facebook or WhatsApp isn't installed, the app says so and falls back to the Android share sheet.
+- [ ] SH5. Sharing several selected events sends one message with each event in its usual format, earliest first. Fliers are offered (Text / Flier / Both) only when every selected event has one; a flier shared by series days is sent once. Otherwise only the text is shared.
 
 ---
 
@@ -238,7 +245,7 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 - [ ] NF3. The app opens to Home in under 2 seconds on a mid-range phone.
 - [ ] NF4. The grid and lists stay smooth with 2,000+ events (several years of bookings).
 - [ ] NF5. Runs on Android 8.0+ (API 26+).
-- [ ] NF6. The screens use a white background. Time pickers always show the 12-hour dial with AM/PM, even when the phone is set to 24-hour time.
+- [ ] NF6. Screens use the off-white (#F5F5F7) background with white cards. Time pickers always show the 12-hour dial with AM/PM, even when the phone is set to 24-hour time.
 
 ---
 

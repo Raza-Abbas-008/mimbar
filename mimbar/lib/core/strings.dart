@@ -195,6 +195,15 @@ const _en = <String, String>{
   'hide_calendar': 'Hide calendar',
   'upcoming_events': 'Upcoming',
   'past_events': 'Past',
+  'selected': 'selected',
+  'select_all': 'Select all',
+  'delete_host': 'Delete host',
+  'delete_hosts_q': 'Delete the selected hosts?',
+  'delete_host_q': 'Delete this host?',
+  'delete_hosts_body': 'Their events keep all their details but will have no host.',
+  'delete_events_q': 'Delete the selected events?',
+  'change_status': 'Change status',
+  'some_without_flier': 'Not every selected event has a flier, so only the text can be shared.',
 };
 
 const _ur = <String, String>{
@@ -353,4 +362,13 @@ const _ur = <String, String>{
   'hide_calendar': 'کیلنڈر چھپائیں',
   'upcoming_events': 'آنے والے',
   'past_events': 'گزشتہ',
+  'selected': 'منتخب',
+  'select_all': 'سب منتخب کریں',
+  'delete_host': 'میزبان حذف کریں',
+  'delete_hosts_q': 'منتخب میزبان حذف کریں؟',
+  'delete_host_q': 'یہ میزبان حذف کریں؟',
+  'delete_hosts_body': 'ان کے پروگرام اپنی تمام تفصیلات کے ساتھ رہیں گے، بس میزبان کے بغیر۔',
+  'delete_events_q': 'منتخب پروگرام حذف کریں؟',
+  'change_status': 'حیثیت بدلیں',
+  'some_without_flier': 'ہر منتخب پروگرام کا فلائر نہیں، اس لیے صرف متن شیئر ہو سکتا ہے۔',
 };

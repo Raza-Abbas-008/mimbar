@@ -16,12 +16,12 @@ class NativeBridge {
   static const facebook = 'com.facebook.katana';
   static const whatsapp = ['com.whatsapp', 'com.whatsapp.w4b'];
 
-  /// Sends text and/or an image straight to one app. False if that app
+  /// Sends text and/or images straight to one app. False if that app
   /// isn't installed.
   static Future<bool> shareTo(String package,
-          {String? text, String? path}) async =>
+          {String? text, List<String> paths = const []}) async =>
       await _ch.invokeMethod<bool>(
-          'shareTo', {'package': package, 'text': text, 'path': path}) ??
+          'shareTo', {'package': package, 'text': text, 'paths': paths}) ??
       false;
 
   /// Opens the contact picker. Returns null if cancelled; throws

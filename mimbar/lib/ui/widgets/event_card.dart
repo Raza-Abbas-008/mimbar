@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/format.dart';
 import '../../core/strings.dart';
 import '../../data/models.dart';
 import '../../data/store.dart';
 import '../event_form_screen.dart';
+import '../selection.dart';
 import 'pressable.dart';
 
 void openEvent(BuildContext context, Event e) => Navigator.of(context).push(
@@ -12,21 +14,49 @@ void openEvent(BuildContext context, Event e) => Navigator.of(context).push(
 
 /// Renders one display group: a single event card, or a yellow-striped
 /// "A + B (Clashing)" card holding every event in the clash.
+///
+/// With [selectable] the cards take part in multi-select: long-press
+/// selects, and while anything is selected a tap toggles instead of opening.
 class EventGroupCard extends StatelessWidget {
   final List<Event> group;
-  const EventGroupCard(this.group, {super.key});
+  final bool selectable;
+  const EventGroupCard(this.group, {super.key, this.selectable = false});
+
+  void _tap(BuildContext context, Event e) {
+    if (selectable && eventSelection.active) {
+      HapticFeedback.selectionClick();
+      eventSelection.toggle(e.id!);
+    } else {
+      openEvent(context, e);
+    }
+  }
+
+  void _longPress(Event e) {
+    if (!selectable) return;
+    HapticFeedback.selectionClick();
+    eventSelection.toggle(e.id!);
+  }
+
+  bool _selected(Event e) => selectable && eventSelection.has(e.id!);
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => selectable
+      ? ListenableBuilder(
+          listenable: eventSelection, builder: (context, _) => _build(context))
+      : _build(context);
+
+  Widget _build(BuildContext context) {
     if (group.length == 1) {
       final e = group.first;
       return _Strip(
         color: store.isClashing(e) ? clashColor : typeColor(e.type),
+        selected: _selected(e),
         child: InkWell(
-          onTap: () => openEvent(context, e),
+          onTap: () => _tap(context, e),
+          onLongPress: selectable ? () => _longPress(e) : null,
           child: Padding(
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-            child: EventBody(e),
+            child: EventBody(e, selected: _selected(e)),
           ),
         ),
       );
@@ -39,6 +69,7 @@ class EventGroupCard extends StatelessWidget {
     }).join(' + ');
     return _Strip(
       color: clashColor,
+      selected: group.any(_selected),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -57,15 +88,19 @@ class EventGroupCard extends StatelessWidget {
           for (final e in group) ...[
             const Divider(height: 1),
             InkWell(
-              onTap: () => openEvent(context, e),
+              onTap: () => _tap(context, e),
+              onLongPress: selectable ? () => _longPress(e) : null,
               child: Container(
-                margin: const EdgeInsetsDirectional.fromSTEB(8, 8, 8, 8),
-                padding: const EdgeInsetsDirectional.only(start: 8),
-                decoration: BoxDecoration(
-                  border: BorderDirectional(
-                      start: BorderSide(color: typeColor(e.type), width: 4)),
+                color: _selected(e) ? _selectedTint : null,
+                padding: const EdgeInsets.all(8),
+                child: Container(
+                  padding: const EdgeInsetsDirectional.only(start: 8),
+                  decoration: BoxDecoration(
+                    border: BorderDirectional(
+                        start: BorderSide(color: typeColor(e.type), width: 4)),
+                  ),
+                  child: EventBody(e, selected: _selected(e)),
                 ),
-                child: EventBody(e),
               ),
             ),
           ],
@@ -75,16 +110,26 @@ class EventGroupCard extends StatelessWidget {
   }
 }
 
+const _selectedTint = Color(0xFFEDEDF2);
+
 class _Strip extends StatelessWidget {
   final Color color;
   final Widget child;
-  const _Strip({required this.color, required this.child});
+  final bool selected;
+  const _Strip({required this.color, required this.child, this.selected = false});
 
   @override
   Widget build(BuildContext context) => Pressable(
         child: Card(
           margin: EdgeInsets.zero,
           clipBehavior: Clip.antiAlias,
+          color: selected ? _selectedTint : null,
+          shape: selected
+              ? RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(
+                      color: Theme.of(context).colorScheme.primary, width: 2))
+              : null,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             mainAxisSize: MainAxisSize.min,
@@ -99,7 +144,8 @@ class _Strip extends StatelessWidget {
 
 class EventBody extends StatelessWidget {
   final Event e;
-  const EventBody(this.e, {super.key});
+  final bool selected;
+  const EventBody(this.e, {super.key, this.selected = false});
 
   @override
   Widget build(BuildContext context) {
@@ -128,6 +174,12 @@ class EventBody extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(children: [
+            if (selected)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 6),
+                child: Icon(Icons.check_circle,
+                    size: 18, color: theme.colorScheme.primary),
+              ),
             Expanded(
               child: Text(
                 typeLabel(e.type, ur),

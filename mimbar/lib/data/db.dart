@@ -261,6 +261,42 @@ class AppDb {
         await _flierChanged(txn, row.first['flier'] as String?, null);
       });
 
+  Future<void> deleteEvents(List<int> ids) => _db.transaction((txn) async {
+        for (final id in ids) {
+          final row = await txn.query('events',
+              columns: ['uid', 'flier'], where: 'id = ?', whereArgs: [id]);
+          if (row.isEmpty) continue;
+          await txn.delete('events', where: 'id = ?', whereArgs: [id]);
+          await _tombstone(txn, 'events', row.first['uid'] as String, _now());
+          await _flierChanged(txn, row.first['flier'] as String?, null);
+        }
+      });
+
+  Future<void> setStatus(List<int> ids, EventStatus status) =>
+      _db.transaction((txn) async {
+        for (final id in ids) {
+          await txn.update('events', {'status': status.name},
+              where: 'id = ?', whereArgs: [id]);
+          await _touch(txn, 'events', id);
+        }
+      });
+
+  /// Deletes hosts. Their events stay, without a host.
+  Future<void> deleteHosts(List<int> ids) => _db.transaction((txn) async {
+        final now = _now();
+        for (final id in ids) {
+          final row = await txn.query('hosts',
+              columns: ['uid'], where: 'id = ?', whereArgs: [id]);
+          if (row.isEmpty) continue;
+          await txn.rawUpdate(
+              'UPDATE events SET host_id = NULL, '
+              'updated_at = MAX(?, updated_at + 1), dirty = 1 WHERE host_id = ?',
+              [now, id]);
+          await txn.delete('hosts', where: 'id = ?', whereArgs: [id]);
+          await _tombstone(txn, 'hosts', row.first['uid'] as String, now);
+        }
+      });
+
   /// Every flier name some event still uses.
   Future<Set<String>> referencedFliers() async => {
         for (final r in await _db.rawQuery(

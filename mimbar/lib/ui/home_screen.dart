@@ -5,6 +5,7 @@ import '../core/hijri.dart';
 import '../core/strings.dart';
 import '../data/models.dart';
 import '../data/store.dart';
+import 'selection.dart';
 import 'widgets/event_card.dart';
 
 class HomeScreen extends StatelessWidget {
@@ -23,6 +24,8 @@ class HomeScreen extends StatelessWidget {
         store.events.where((e) => gKey(store.gregOf(e)) == todayK).toList();
     final upcoming =
         store.events.where((e) => gKey(store.gregOf(e)) > todayK).toList();
+    eventSelection
+        .setVisible('home', [for (final e in [...todays, ...upcoming]) e.id!]);
 
     Widget heading(String key) => Padding(
           padding: const EdgeInsets.fromLTRB(4, 20, 4, 8),
@@ -43,7 +46,7 @@ class HomeScreen extends StatelessWidget {
           for (final g in store.groupForDisplay(list))
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: EventGroupCard(g),
+              child: EventGroupCard(g, selectable: true),
             ),
         ];
 

@@ -44,9 +44,9 @@ void openEventById(int id) {
 }
 
 const ink = Color(0xFF111111);
-const canvas = Colors.white;
+const canvas = Color(0xFFF5F5F7);
 
-/// Light grey for text fields and inset panels on the white canvas.
+/// Light grey for inset panels on white sheets.
 const fieldFill = Color(0xFFF2F2F7);
 const hairline = Color(0x1A000000);
 
@@ -155,7 +155,7 @@ ThemeData buildTheme(bool ur) {
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: fieldFill,
+      fillColor: Colors.white,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: hairline),

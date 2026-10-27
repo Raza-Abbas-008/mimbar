@@ -216,6 +216,29 @@ class AppStore extends ChangeNotifier {
     sync.request();
   }
 
+  Future<void> deleteEvents(List<Event> list) async {
+    await db.deleteEvents([for (final e in list) e.id!]);
+    events = await db.loadEvents();
+    await _refreshDerived();
+    sync.request();
+  }
+
+  Future<void> setStatus(List<Event> list, EventStatus status) async {
+    await db.setStatus([for (final e in list) e.id!], status);
+    events = await db.loadEvents();
+    await _refreshDerived();
+    sync.request();
+  }
+
+  /// Deletes hosts; their events keep everything except the host.
+  Future<void> deleteHosts(List<int> ids) async {
+    await db.deleteHosts(ids);
+    hosts = await db.loadHosts();
+    events = await db.loadEvents();
+    await _refreshDerived();
+    sync.request();
+  }
+
   Future<void> updateSettings(AppSettings s) async {
     await db.saveSettings(s.toKv());
     settings = s;

@@ -6,6 +6,7 @@ import '../core/hijri.dart';
 import '../core/strings.dart';
 import '../data/models.dart';
 import '../data/store.dart';
+import 'selection.dart';
 import 'widgets/event_card.dart';
 
 /// Keep-style grid. The scroll view is centred on today: upcoming events grow
@@ -47,6 +48,7 @@ class _CreateScreenState extends State<CreateScreen> {
     final theme = Theme.of(context);
     final todayK = gKey(DateTime.now());
     final filtered = store.events.where(_matches).toList();
+    eventSelection.setVisible('create', [for (final e in filtered) e.id!]);
     final upcoming = store.groupForDisplay(
         filtered.where((e) => gKey(store.gregOf(e)) >= todayK).toList());
     // Most recent first, so the newest past event sits just above today.
@@ -61,7 +63,7 @@ class _CreateScreenState extends State<CreateScreen> {
           mainAxisSpacing: 10,
           crossAxisSpacing: 10,
           childCount: groups.length,
-          itemBuilder: (_, i) => EventGroupCard(groups[i]),
+          itemBuilder: (_, i) => EventGroupCard(groups[i], selectable: true),
         );
 
     return Column(children: [
