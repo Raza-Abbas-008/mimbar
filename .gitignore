@@ -1,0 +1,12 @@
+# Release signing key and its passwords: never commit.
+/keys/
+key.properties
+*.jks
+*.keystore
+
+# Supabase URL and key for builds (see README).
+mimbar/supabase.json
+
+# Built APKs are published as GitHub Releases instead.
+*.apk
+*.aab
