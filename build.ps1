@@ -1,6 +1,8 @@
 # Builds the release APK to .\Mimbar.apk.
 # Cloud sync is compiled in only when mimbar\supabase.json exists (see README).
-$ErrorActionPreference = 'Stop'
+# 'Continue': flutter writes harmless warnings to stderr, which 'Stop' treats
+# as fatal in Windows PowerShell. Failure is checked via the exit code instead.
+$ErrorActionPreference = 'Continue'
 $env:JAVA_HOME = 'C:\dev\jdk-17'
 $env:ANDROID_HOME = 'C:\dev\android-sdk'
 $env:Path = "C:\dev\flutter\bin;C:\dev\jdk-17\bin;$env:Path"

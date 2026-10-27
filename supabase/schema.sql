@@ -50,14 +50,15 @@ create index if not exists hosts_pull  on public.hosts  (user_id, server_ts);
 create index if not exists events_pull on public.events (user_id, server_ts);
 
 -- Last write wins: an upsert carrying an older edit than the stored row is
--- ignored. Also pins every row to the signed-in user.
+-- ignored. Also pins every row to the signed-in user (an admin script run in
+-- the SQL editor has no signed-in user, so it may set user_id itself).
 create or replace function public.mimbar_lww() returns trigger
 language plpgsql as $$
 begin
   if tg_op = 'UPDATE' and new.updated_at < old.updated_at then
     return null;
   end if;
-  new.user_id := auth.uid();
+  new.user_id := coalesce(auth.uid(), new.user_id);
   new.server_ts := clock_timestamp();
   return new;
 end $$;
