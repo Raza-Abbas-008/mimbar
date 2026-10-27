@@ -34,6 +34,16 @@ class NativeBridge {
         r['name'] as String? ?? '', List<String>.from(r['phones'] as List));
   }
 
+  /// Opens the phone's own gallery app. Returns the picked image's path,
+  /// null if cancelled, or throws [GalleryUnavailable] when no gallery app
+  /// can be opened (the caller then uses the system photo picker).
+  static Future<String?> pickImage() async {
+    final r = await _ch.invokeMapMethod<String, dynamic>('pickImage');
+    if (r == null) return null;
+    if (r['unavailable'] == true) throw const GalleryUnavailable();
+    return r['path'] as String?;
+  }
+
   /// An image another app shared into Mimbar at launch, if any.
   static Future<String?> takeSharedImage() =>
       _ch.invokeMethod<String>('takeSharedImage');
@@ -47,4 +57,8 @@ class NativeBridge {
 
 class ContactsDenied implements Exception {
   const ContactsDenied();
+}
+
+class GalleryUnavailable implements Exception {
+  const GalleryUnavailable();
 }

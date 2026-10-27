@@ -6,15 +6,21 @@ import 'package:image_picker/image_picker.dart';
 
 import '../core/strings.dart';
 import '../services/fliers.dart';
+import '../services/native.dart';
 import '../services/sync.dart';
 import 'share_sheet.dart';
 
-/// Lets the user pick an image from the gallery and stores it as a flier.
-/// Returns the new flier's name, or null if they backed out.
+/// Lets the user pick an image from the phone's gallery app and stores it
+/// as a flier. Returns the new flier's name, or null if they backed out.
 Future<String?> pickFlier() async {
-  final x = await ImagePicker().pickImage(source: ImageSource.gallery);
-  if (x == null) return null;
-  return Fliers.add(x.path);
+  String? path;
+  try {
+    path = await NativeBridge.pickImage();
+  } on GalleryUnavailable {
+    path = (await ImagePicker().pickImage(source: ImageSource.gallery))?.path;
+  }
+  if (path == null) return null;
+  return Fliers.add(path);
 }
 
 /// Full-screen flier with pinch-to-zoom. [onChanged] gets the replacement

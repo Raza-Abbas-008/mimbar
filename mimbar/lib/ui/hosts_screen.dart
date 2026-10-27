@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../core/strings.dart';
 import '../data/models.dart';
 import '../data/store.dart';
+import 'host_actions.dart';
 import 'host_picker.dart';
 import 'widgets/event_card.dart';
 
@@ -58,6 +59,16 @@ class _HostsScreenState extends State<HostsScreen> {
           // Hosts deleted elsewhere (e.g. by sync) drop out of the selection.
           selected.removeWhere((id) => store.hosts.every((h) => h.id != id));
           final selecting = selected.isNotEmpty;
+          final one = selected.length == 1
+              ? store.hosts.firstWhere((h) => h.id == selected.first)
+              : null;
+          IconButton act(IconData icon, String key, VoidCallback onTap) =>
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                tooltip: tr(context, key),
+                icon: Icon(icon),
+                onPressed: onTap,
+              );
           return PopScope(
             canPop: !selecting,
             onPopInvokedWithResult: (didPop, _) {
@@ -73,17 +84,18 @@ class _HostsScreenState extends State<HostsScreen> {
                       ),
                       title: Text('${selected.length} ${tr(context, 'selected')}'),
                       actions: [
-                        IconButton(
-                          tooltip: tr(context, 'select_all'),
-                          icon: const Icon(Icons.select_all),
-                          onPressed: () => setState(() =>
-                              selected.addAll([for (final h in store.hosts) h.id!])),
-                        ),
-                        IconButton(
-                          tooltip: tr(context, 'delete'),
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: _delete,
-                        ),
+                        // With one host: reach them straight from here.
+                        if (one != null) ...[
+                          act(Icons.copy_outlined, 'copy_number',
+                              () => copyHostNumber(context, one)),
+                          act(Icons.call_outlined, 'call',
+                              () => callHost(context, one)),
+                          act(Icons.chat_outlined, 'whatsapp',
+                              () => whatsappHost(context, one)),
+                        ],
+                        act(Icons.select_all, 'select_all', () => setState(() =>
+                            selected.addAll([for (final h in store.hosts) h.id!]))),
+                        act(Icons.delete_outline, 'delete', _delete),
                       ],
                     )
                   : AppBar(title: Text(tr(context, 'hosts'))),
@@ -192,6 +204,24 @@ class HostDetailScreen extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: const Icon(Icons.phone),
                   title: Text(host.phone),
+                  onLongPress: () => copyHostNumber(context, host),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(
+                      tooltip: tr(context, 'copy_number'),
+                      icon: const Icon(Icons.copy_outlined),
+                      onPressed: () => copyHostNumber(context, host),
+                    ),
+                    IconButton(
+                      tooltip: tr(context, 'call'),
+                      icon: const Icon(Icons.call_outlined),
+                      onPressed: () => callHost(context, host),
+                    ),
+                    IconButton(
+                      tooltip: tr(context, 'whatsapp'),
+                      icon: const Icon(Icons.chat_outlined),
+                      onPressed: () => whatsappHost(context, host),
+                    ),
+                  ]),
                 ),
                 if (host.venue.isNotEmpty)
                   ListTile(

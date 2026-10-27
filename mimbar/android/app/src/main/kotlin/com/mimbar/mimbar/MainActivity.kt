@@ -9,6 +9,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.ContactsContract
+import android.provider.MediaStore
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterActivity
@@ -28,6 +29,7 @@ class MimbarFileProvider : FileProvider()
 class MainActivity : FlutterActivity() {
     private var channel: MethodChannel? = null
     private var pendingContact: MethodChannel.Result? = null
+    private var pendingImage: MethodChannel.Result? = null
     private var sharedImage: String? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -43,6 +45,7 @@ class MainActivity : FlutterActivity() {
                         )
                     )
                     "pickContact" -> pickContact(result)
+                    "pickImage" -> pickImage(result)
                     "takeSharedImage" -> {
                         result.success(sharedImage)
                         sharedImage = null
@@ -100,16 +103,53 @@ class MainActivity : FlutterActivity() {
             intent.getParcelableExtra(Intent.EXTRA_STREAM)
         }) ?: return null
         setIntent(Intent(this, MainActivity::class.java))
-        return try {
-            val dir = File(cacheDir, "shared").apply { mkdirs() }
-            val out = File(dir, "shared-${System.currentTimeMillis()}.img")
-            contentResolver.openInputStream(uri)?.use { input ->
-                out.outputStream().use { input.copyTo(it) }
-            } ?: return null
-            out.path
-        } catch (e: Exception) {
-            null
+        return copyToCache(uri, "shared")
+    }
+
+    /** Starts [base] in the first of [packages] that is installed, else in
+     *  whatever app Android picks. Returns false if nothing can handle it. */
+    private fun startFirst(base: Intent, packages: List<String>, request: Int): Boolean {
+        for (pkg in packages) {
+            try {
+                @Suppress("DEPRECATION")
+                startActivityForResult(Intent(base).setPackage(pkg), request)
+                return true
+            } catch (e: ActivityNotFoundException) {
+                // Not installed: try the next one.
+            }
         }
+        return try {
+            @Suppress("DEPRECATION")
+            startActivityForResult(base, request)
+            true
+        } catch (e: ActivityNotFoundException) {
+            false
+        }
+    }
+
+    // ------------------------------------------------------------ gallery
+
+    /** The phone's own gallery app (Xiaomi, Samsung, AOSP) rather than the
+     *  system photo picker, which opens Google Photos on some phones. */
+    private fun pickImage(result: MethodChannel.Result) {
+        pendingImage?.success(null)
+        pendingImage = result
+        val pick = Intent(Intent.ACTION_PICK)
+            .setDataAndType(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, "image/*")
+        if (!startFirst(pick, GALLERIES, REQ_IMAGE)) {
+            pendingImage = null
+            result.success(mapOf("unavailable" to true))
+        }
+    }
+
+    private fun copyToCache(uri: Uri, prefix: String): String? = try {
+        val dir = File(cacheDir, "shared").apply { mkdirs() }
+        val out = File(dir, "$prefix-${System.currentTimeMillis()}.img")
+        contentResolver.openInputStream(uri)?.use { input ->
+            out.outputStream().use { input.copyTo(it) }
+        }?.let { out.path }
+    } catch (e: Exception) {
+        null
     }
 
     // ----------------------------------------------------------- contacts
@@ -137,11 +177,11 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /** The phone's Contacts app by package, so a file manager that claims
+     *  "pick" (seen on Xiaomi) isn't opened instead. */
     private fun launchPicker() {
-        try {
-            @Suppress("DEPRECATION")
-            startActivityForResult(Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI), REQ_PICK)
-        } catch (e: ActivityNotFoundException) {
+        val pick = Intent(Intent.ACTION_PICK, ContactsContract.Contacts.CONTENT_URI)
+        if (!startFirst(pick, CONTACT_APPS, REQ_PICK)) {
             pendingContact?.success(null)
             pendingContact = null
         }
@@ -150,6 +190,19 @@ class MainActivity : FlutterActivity() {
     @Deprecated("Deprecated in Java")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQ_IMAGE) {
+            val r = pendingImage ?: return
+            pendingImage = null
+            val uri = data?.data
+            r.success(
+                if (resultCode == Activity.RESULT_OK && uri != null) {
+                    copyToCache(uri, "picked")?.let { mapOf("path" to it) }
+                } else {
+                    null
+                }
+            )
+            return
+        }
         if (requestCode != REQ_PICK) return
         val result = pendingContact ?: return
         pendingContact = null
@@ -184,5 +237,16 @@ class MainActivity : FlutterActivity() {
     companion object {
         private const val REQ_CONTACTS = 0x4D31
         private const val REQ_PICK = 0x4D32
+        private const val REQ_IMAGE = 0x4D33
+
+        /** Tried in order; Google Photos deliberately isn't on the list. */
+        private val GALLERIES = listOf(
+            "com.miui.gallery", "com.sec.android.gallery3d", "com.android.gallery3d",
+            "com.coloros.gallery3d", "com.vivo.gallery", "com.oneplus.gallery"
+        )
+        private val CONTACT_APPS = listOf(
+            "com.android.contacts", "com.google.android.contacts",
+            "com.samsung.android.app.contacts"
+        )
     }
 }

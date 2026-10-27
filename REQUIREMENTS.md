@@ -76,7 +76,7 @@ Bottom navigation with three tabs, and a **gear icon** in the top bar that opens
 ### 3.3a Flier (Majlis and Milad only)
 - [ ] E12. A Majlis or Milad can have **one optional flier** (an image). Nikkah events never show flier options.
 - [ ] E13. The flier is hidden until the event is opened. Directly under the title, above everything else, a button reads **Add flier** (none yet) or **View flier** (one attached).
-- [ ] E14. **Add flier** opens the phone's photo gallery. The image is shrunk to about 1600 px (a few hundred KB) before it is stored.
+- [ ] E14. **Add flier** opens the phone's own gallery app (e.g. Xiaomi Gallery), not Google Photos; the system photo picker is only a fallback when no gallery app is found. The image is shrunk to about 1600 px (a few hundred KB) before it is stored.
 - [ ] E15. **View flier** opens it full screen with pinch-to-zoom and four actions: **Share** (the flier only), **Replace**, **Save to gallery**, **Remove** (after a confirmation).
 - [ ] E16. Mimbar appears in other apps' **Share** menu for images. Sharing a flier from WhatsApp to Mimbar lists the upcoming (then recent past) Majlis and Milad events, and tapping one attaches it, asking first if it would replace an existing flier.
 - [ ] E17. Event cards in lists show a small image icon when the event has a flier.
@@ -131,6 +131,8 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 - [ ] H8. Importing needs the Contacts permission, asked the first time. If it is refused, the dialog says how to allow it. Mimbar reads only the picked contact.
 - [ ] H9. A host can be deleted (from its detail page, or several at once from the list) after a confirmation. Their events keep all their details but no longer have a host; this syncs to the other phone.
 - [ ] H10. The hosts list supports Gmail-style multi-select: long-press starts it, taps add or remove hosts, and the top bar shows "N selected" with **Select all**, **Delete** and ✕. Back leaves selection mode.
+- [ ] H11. With exactly one host selected (and on a host's detail page) there are also **Copy number**, **Call** (opens the dialer with the number, where the SIM is chosen) and **WhatsApp** (opens a chat with that number).
+- [ ] H12. **Import from contacts** opens the phone's own Contacts app (e.g. Xiaomi Contacts), never a file manager.
 
 ---
 
@@ -278,5 +280,5 @@ Two non-cancelled events **clash** if their time ranges overlap on the same Greg
 
 ---
 
-## 16. Open questions
-None at present.
+## 16. Open questions / later
+- Public booking forms (Tally-style), one link per event type, which a booking party fills in and which land in Supabase and appear in the app. Parked for a later version.
